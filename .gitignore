@@ -137,3 +137,14 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Temporary upload directory
+tmp/
+
+# ProjectOps run artifacts (keep sample_run for demo)
+runs/
+!runs/sample_run/
+!runs/sample_run/**/*
+
+# Generated inputs
+data/generated_inputs/

@@ -1,175 +1,139 @@
-# DecisionOps (Internal Decision Intelligence for Operations)
+# ProjectOps
 
-DecisionOps is an **internal decision & operations intelligence system** — not a public app.
+**Construction Schedule & Budget Risk Monitor**
 
-It ingests messy operational data (exports, CSVs, forms, APIs, manual inputs), normalizes it into clean, queryable records, and surfaces **decision-oriented views** for managers: priorities, bottlenecks, tradeoffs, and scenarios — with an **explainability layer** that makes assumptions, limitations, and failure modes explicit.
+ProjectOps is a deterministic operational analytics engine that converts raw construction project exports into structured decision signals with reproducible run snapshots. It identifies schedule delays, budget overruns, and dependency bottlenecks across multiple projects to help construction operations teams make data-driven decisions.
 
----
+## Who It's For
 
-## Project Idea
+- **Construction Operations Managers** monitoring multiple active projects
+- **Project Managers** tracking schedule and budget risks
+- **Operations Analysts** analyzing project health and bottlenecks
 
-Organizations don’t fail because they lack dashboards — they fail because decision-making is:
-- reactive instead of proactive
-- based on partial context
-- driven by conflicting incentives
-- difficult to explain or audit
+## What Decisions It Supports
 
-**SignalDesk turns operational noise into decision clarity.**
+- **Schedule Risk**: Identify tasks behind schedule and critical path dependencies at risk
+- **Budget Overburn**: Detect tasks overspending and project projected overruns
+- **Dependency Bottlenecks**: Surface subcontractors and trades causing schedule lag
 
-Core principle:
-> The system doesn’t “make the decision.”  
-> It makes the decision **understandable, comparable, and defensible.**
+## Quickstart
 
----
+### Development
 
-## Output (What DecisionOps Produces)
+```bash
+# Install dependencies
+npm install
 
-DecisionOps generates **decision-ready artifacts** — not just charts.
+# Start the web application (API + UI)
+npm run dev
+```
 
-### 1) Focus Queue (What needs attention now)
-A prioritized list of operational issues (e.g., tickets, backlogs, risk clusters) with:
-- urgency drivers (aging, SLA breach risk, churn risk proxy)
-- confidence level / data quality flags
-- recommended actions (triage, escalate, reroute, staff shift)
-- “why this matters” explanation
+Then:
+1. Open http://localhost:3000
+2. Click **"Generate Demo Run"** to create a sample dataset
+3. Or click **"Upload Weekly Snapshot CSV"** to upload your own data
 
-### 2) Bottleneck & Load Diagnosis
-- where work is accumulating
-- which categories/queues are overloaded
-- workload distribution across teams/agents
+The dashboard will automatically load and display project health scores, risk metrics, and per-project summaries.
 
-### 3) Scenario Comparisons (What breaks if…)
-“What-if” simulations such as:
-- +1 agent / -1 agent
-- +20% ticket volume
-- rerouting Category X to Team B
-- changing SLA policy thresholds
+### Production
 
-Outputs include:
-- expected SLA breach counts
-- backlog growth/shrink projections
-- stressed queues and failure points
+```bash
+# Build for production
+npm run build
 
-### 4) Explainability Report
-For every major recommendation:
-- assumptions used (e.g., handling time estimates)
-- limitations (missing tags, inconsistent fields)
-- blind spots (what the system can’t see)
-- failure modes (when the guidance becomes unreliable)
+# Start production server
+npm start
+```
 
----
+The production server runs on http://localhost:3001 and serves both the API and static web files.
 
-## Input (How Data Enters the System)
+## CLI Usage (Optional)
 
-SignalDesk uses **structured inputs** first, with optional human notes second.
+For batch processing or automation:
 
-### A) Bulk Uploads (Primary)
-- CSV exports (Zendesk/Intercom-style)
-- spreadsheets (weekly snapshots)
-- event logs
+```bash
+# Ingest a CSV file
+npm run ingest -- data/sample_inputs/projectops_tasks.csv
 
-### B) APIs (Optional in v1)
-- scheduled pulls from helpdesk APIs
-- incremental syncs
+# Generate a sample dataset
+npm run gen:sample -- --seed 42 --projects 3 --tasks 25
+```
 
-### C) Forms / Manual Inputs (For missing context)
-Used for “information the raw data doesn’t contain,” like:
-- agent availability this week
-- known operational constraints (outages, launches)
-- policy overrides (VIP handling, special SLA rules)
+## Input CSV Schema
 
-### D) Annotations (Optional, controlled free text)
-- manager notes attached to decisions
-- overrides with explicit reason
+Your CSV must include these columns:
 
----
+| Column | Required | Description | Example |
+|--------|----------|-------------|---------|
+| `project_id` | ✅ Yes | Unique project identifier | `PROJ-001` |
+| `task_id` | ✅ Yes | Unique task identifier | `TASK-001` |
+| `task_name` | ✅ Yes | Task description | `Foundation Pour` |
+| `trade` | ⚠️ Warn | Trade category | `concrete`, `framing`, `electrical` |
+| `subcontractor` | ⚠️ Warn | Subcontractor name | `Premier Concrete Co` |
+| `planned_start` | ✅ Yes | ISO date | `2024-01-15T08:00:00Z` |
+| `planned_end` | ✅ Yes | ISO date | `2024-01-20T17:00:00Z` |
+| `actual_start` | No | ISO date (optional) | `2024-01-16T08:00:00Z` |
+| `progress_pct` | No | 0-100 | `45` |
+| `budget_allocated` | No | Dollar amount | `50000` |
+| `budget_spent` | ⚠️ Warn | Dollar amount (defaults to 0) | `25000` |
+| `depends_on_task_id` | No | Task dependency | `TASK-000` |
+| `status` | ⚠️ Warn | Task status | `not_started`, `in_progress`, `blocked`, `done` |
 
-## Process (How SignalDesk Works)
+**Validation Rules:**
+- Hard fail: Missing `project_id`, `task_id`, `planned_start`, or `planned_end`
+- Hard fail: `planned_end` < `planned_start`
+- Soft warn: Missing `trade`/`subcontractor`/`status` → mapped to "unknown"
+- Soft warn: `progress_pct` out of range → clamped to 0-100
+- Soft warn: Missing `budget_spent` → defaults to 0
 
-### Step 1 — Ingest
-- accept file upload/API payload/form submission
-- validate required fields
-- store raw input (never destroyed)
+## Output Artifacts
 
-### Step 2 — Normalize
-- map raw fields into a canonical schema
-- standardize time formats, categories, IDs
-- handle missing values with explicit flags (not silent guesses)
+Each ingestion run creates a timestamped folder in `runs/` containing:
 
-### Step 3 — Compute Decision Signals (Deterministic)
-Examples:
-- aging risk = time since creation vs SLA thresholds
-- overload = incoming volume vs capacity proxy
-- bottleneck = queue growth rate and resolution lag
-- risk clusters = categories where backlog + breach risk concentrates
+| File | Description |
+|------|-------------|
+| `manifest.json` | Run metadata: label, source type, row counts, timestamps |
+| `raw.csv` | Original input CSV (preserved) |
+| `normalized_tasks.json` | Canonical task data with validation results |
+| `validation_report.json` | Data quality summary: rejected rows, warnings |
+| `project_signals.json` | Computed metrics: health scores, bottlenecks, per-project risks |
+| `dashboard_report.html` | Static HTML report (openable in browser) |
 
-### Step 4 — Decision Views
-- Focus Queue (triage)
-- Bottlenecks
-- SLA Breach Forecast (near-term)
-- Scenario comparison outputs
+## Screenshots
 
-### Step 5 — Explainability Layer
-- attach “why” to each decision artifact
-- list assumptions + what breaks at scale
-- show data quality warnings
+<!-- TODO: Add screenshots -->
+- Executive Snapshot with Project Health Score
+- Per-Project Risk Summary Table
+- Schedule Lag Bottlenecks by Subcontractor/Trade
+- Data Reliability Summary
 
----
+## Design Principles
 
-## Edge Cases (What SignalDesk Must Handle)
+- **Deterministic**: No machine learning or randomness—same input produces same output. Demo runs use seeded random number generation (default seed: 42) for reproducible results.
+- **Reproducible Snapshots**: Each run is an immutable snapshot with full audit trail, including source type, seed (for demos), and generation timestamp.
+- **Minimal Dependencies**: Core logic is pure TypeScript with Zod validation
+- **Manager-Friendly**: Business language, not technical jargon
 
-### Data Quality & Missingness
-- missing timestamps
-- missing/incorrect priority labels
-- inconsistent category tags
-- duplicate records across uploads
-- stale snapshots
+## Run Management
 
-### Operational Weirdness
-- sudden spikes (product outage, release)
-- holidays / staffing shifts
-- policy changes mid-week
-- “VIP” tickets distorting queue fairness
+### Cleanup
 
-### Scale & Reliability
-- guidance becomes less reliable when:
-  - classification fields are low quality
-  - volume saturates queues (everything becomes “urgent”)
-  - the system has no capacity estimates
-- the system must surface this explicitly, not hide it
+The `runs/` folder contains local artifacts and is not meant to be committed. Use cleanup commands to manage disk space:
 
----
+```bash
+# Keep latest 10 demo runs, delete older ones
+npm run cleanup:runs
 
-## What SignalDesk Is NOT
+# Delete all demo runs and regenerate baseline (seed 42)
+npm run reset:demo
+```
 
-SignalDesk does **not**:
-- auto-resolve tickets
-- pretend to be a perfect AI oracle
-- replace managers
-- depend on free-text chat as its main input
-- require ML in v1
+The web UI also includes a "Clean up runs" button that keeps the latest 10 demo runs.
 
-SignalDesk is a **decision infrastructure layer**: structured inputs → deterministic signals → explainable outputs.
+### Demo Run Determinism
 
----
+Demo runs are generated using a seeded random number generator. Clicking "Generate Demo Run" multiple times with the same seed produces identical metrics. The default seed is 42, ensuring consistent demo data for screenshots and documentation.
 
-## v1 Scope (Tight & Defensible)
+## License
 
-### v1 includes:
-- CSV ingestion + field mapping
-- canonical schema + data validation
-- decision signals (aging, breach risk, backlog stress, bottlenecks)
-- scenario simulation (basic “what-if”)
-- explainability artifacts (assumptions, blind spots, failure modes)
-- minimal UI or CLI to display outputs
-
-### v1 intentionally excludes:
-- ML-based classification
-- real-time streaming ingestion
-- multi-tenant auth / enterprise SSO
-- complex workflow automation
-- full BI dashboarding features
-
----
-
-## Repository Structure (Proposed)
+ISC
