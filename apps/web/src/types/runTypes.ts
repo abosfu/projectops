@@ -4,6 +4,7 @@ export interface Manifest {
   sourceType: "upload" | "demo" | "cli";
   sourceFilename?: string;
   seed?: number | null;
+  seedString?: string | null;
   inputRowCount?: number;
   inputFile: string;
   totalRows: number;

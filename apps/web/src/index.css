@@ -37,8 +37,8 @@ h1 {
 
 h2 {
   color: #111;
-  margin-top: 64px;
-  margin-bottom: 32px;
+  margin-top: 0;
+  margin-bottom: 24px;
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
@@ -72,7 +72,7 @@ select:focus {
 }
 
 .section {
-  margin-bottom: 64px;
+  margin-bottom: 48px;
 }
 
 .section-divider {
@@ -80,51 +80,7 @@ select:focus {
   margin: 64px 0;
 }
 
-.executive-snapshot {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 48px;
-  margin-bottom: 64px;
-  padding-bottom: 64px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.executive-snapshot .kpi-metric[style*="grid-column"] {
-  grid-column: 1 / -1;
-}
-
-.kpi-metric {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.kpi-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: #64748b;
-  font-weight: 600;
-}
-
-.kpi-value {
-  font-size: 48px;
-  font-weight: 700;
-  color: #111;
-  line-height: 1;
-  letter-spacing: -1px;
-}
-
-.kpi-value.breached-positive {
-  color: #16a34a;
-}
-
-.kpi-trend {
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 500;
-  margin-top: 4px;
-}
+/* Executive snapshot styles removed - now using inline styles */
 
 .metric-grid {
   display: grid;
@@ -155,36 +111,7 @@ select:focus {
   letter-spacing: -0.5px;
 }
 
-.progress-bar-container {
-  margin-top: 24px;
-  margin-bottom: 32px;
-}
-
-.progress-bar-label {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #111;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.progress-bar {
-  width: 100%;
-  height: 8px;
-  background: #f1f5f9;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.progress-bar-fill {
-  height: 100%;
-  transition: width 0.3s ease;
-  border-radius: 4px;
-  background: #16a34a;
-}
+/* Progress bar styles moved to component inline styles */
 
 .delta {
   font-size: 13px;
@@ -208,9 +135,9 @@ table {
 
 th,
 td {
-  padding: 16px 0;
+  padding: 20px 16px;
   text-align: left;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: none;
 }
 
 th {
@@ -231,29 +158,14 @@ td strong {
   color: #111;
 }
 
-tr:last-child td {
-  border-bottom: none;
-}
+/* Removed border-bottom rule - using zebra striping instead */
 
 .chart-container {
   margin-top: 32px;
   padding: 0;
 }
 
-.text-link {
-  color: #16a34a;
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 500;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 16px;
-}
-
-.text-link:hover {
-  text-decoration: underline;
-}
+/* Text link styles moved to component inline styles */
 
 .data-quality-summary {
   font-size: 14px;

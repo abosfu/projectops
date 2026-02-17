@@ -5,40 +5,35 @@ interface RunProvenanceProps {
 }
 
 export function RunProvenance({ manifest }: RunProvenanceProps) {
-  const formatSource = () => {
-    if (manifest.sourceType === "demo") {
-      const seedText = manifest.seed !== null && manifest.seed !== undefined 
-        ? `seed ${manifest.seed}` 
-        : "seed unknown";
-      return `Demo (${seedText})`;
-    } else if (manifest.sourceType === "upload") {
-      return "Uploaded CSV";
-    } else {
-      return "CLI";
-    }
-  };
-
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
+    const dateStr = date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
+    });
+    const timeStr = date.toLocaleTimeString("en-US", {
       hour: "numeric",
       minute: "2-digit",
+      hour12: true,
     });
+    return { dateStr, timeStr };
   };
 
   const rowCount = manifest.inputRowCount || manifest.totalRows;
-  const generatedAt = manifest.generatedAt || manifest.createdAt;
+  const date = new Date(manifest.createdAt);
+  const monthYear = date.toLocaleDateString("en-US", {
+    month: "short",
+    year: "numeric",
+  });
 
   return (
     <div style={{ 
       fontSize: "12px", 
       color: "#64748b", 
       marginTop: "8px",
-      marginBottom: "24px"
+      marginBottom: "32px"
     }}>
-      Source: {formatSource()} • {rowCount} row{rowCount !== 1 ? "s" : ""} • Generated {formatDate(generatedAt)}
+      Weekly Portfolio Snapshot — {monthYear} • {rowCount} task{rowCount !== 1 ? "s" : ""}
     </div>
   );
 }

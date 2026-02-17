@@ -56,7 +56,7 @@ export function CSVUpload({ onUploadSuccess }: CSVUploadProps) {
   };
 
   return (
-    <div style={{ marginBottom: "32px" }}>
+    <div>
       <input
         ref={fileInputRef}
         type="file"
@@ -71,22 +71,23 @@ export function CSVUpload({ onUploadSuccess }: CSVUploadProps) {
           type="button"
           disabled={uploading}
           style={{
-            padding: "10px 20px",
+            padding: "12px 24px",
             fontSize: "14px",
             fontWeight: "500",
             cursor: uploading ? "not-allowed" : "pointer",
             opacity: uploading ? 0.6 : 1,
-            border: "1px solid #e5e7eb",
+            border: "none",
             borderRadius: "6px",
-            background: "#ffffff",
-            color: "#111",
+            background: "#111",
+            color: "#ffffff",
+            transition: "opacity 0.2s",
           }}
         >
           {uploading ? "Uploading..." : "Upload Weekly Snapshot CSV"}
         </button>
       </label>
       {error && (
-        <div style={{ marginTop: "8px", color: "#dc2626", fontSize: "14px" }}>
+        <div style={{ marginTop: "8px", color: "#dc2626", fontSize: "13px" }}>
           {error}
         </div>
       )}

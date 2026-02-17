@@ -4,6 +4,8 @@ interface DemoRunGeneratorProps {
   onGenerateSuccess: (runId: string) => void;
 }
 
+const DEFAULT_SEED = "projectops-demo";
+
 export function DemoRunGenerator({ onGenerateSuccess }: DemoRunGeneratorProps) {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +20,9 @@ export function DemoRunGenerator({ onGenerateSuccess }: DemoRunGeneratorProps) {
         headers: {
           "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          seed: DEFAULT_SEED,
+        }),
       });
 
       if (!response.ok) {
@@ -43,7 +48,7 @@ export function DemoRunGenerator({ onGenerateSuccess }: DemoRunGeneratorProps) {
         onClick={handleGenerate}
         disabled={generating}
         style={{
-          padding: "10px 20px",
+          padding: "12px 24px",
           fontSize: "14px",
           fontWeight: "500",
           cursor: generating ? "not-allowed" : "pointer",
@@ -52,12 +57,13 @@ export function DemoRunGenerator({ onGenerateSuccess }: DemoRunGeneratorProps) {
           borderRadius: "6px",
           background: "#ffffff",
           color: "#111",
+          transition: "opacity 0.2s",
         }}
       >
-        {generating ? "Generating..." : "Generate Demo Run"}
+        {generating ? "Generating..." : "Generate Sample Snapshot"}
       </button>
       {error && (
-        <div style={{ marginTop: "8px", color: "#dc2626", fontSize: "14px" }}>
+        <div style={{ marginTop: "8px", color: "#dc2626", fontSize: "13px" }}>
           {error}
         </div>
       )}

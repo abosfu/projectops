@@ -8,9 +8,11 @@ import { StatusOverview } from "./components/StatusOverview.js";
 import { DataQualitySummary } from "./components/DataQualitySummary.js";
 import { CSVUpload } from "./components/CSVUpload.js";
 import { DemoRunGenerator } from "./components/DemoRunGenerator.js";
+import { Accordion } from "./components/Accordion.js";
 import { RunProvenance } from "./components/RunProvenance.js";
-import { RunCleanup } from "./components/RunCleanup.js";
+import { Definitions } from "./components/Definitions.js";
 import { formatRunLabel } from "./utils/runLabelFormatter.js";
+import { computeDelta, formatDelta } from "./utils/comparisonUtils.js";
 
 export function RunDashboard() {
   const [runMetadata, setRunMetadata] = useState<RunMetadata[]>([]);
@@ -166,56 +168,81 @@ export function RunDashboard() {
     });
   };
 
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "48px" }}>
         <div>
-          <h1>ProjectOps</h1>
-          <p className="page-subtitle">Construction Schedule & Budget Risk Monitor</p>
+          <h1 style={{ textTransform: "none" }}>ProjectOps</h1>
+          <p className="page-subtitle">Internal Construction Operations Intelligence</p>
         </div>
         {reportPath && (
-          <a href="#" onClick={(e) => { e.preventDefault(); openReport(); }} className="text-link">
+          <a 
+            href="#" 
+            onClick={(e) => { e.preventDefault(); openReport(); }} 
+            style={{
+              color: "#16a34a",
+              textDecoration: "none",
+              fontSize: "12px",
+              fontWeight: "400",
+              marginTop: "8px",
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.textDecoration = "underline"}
+            onMouseLeave={(e) => e.currentTarget.style.textDecoration = "none"}
+          >
             View full report →
           </a>
         )}
       </div>
 
-      <div style={{ display: "flex", gap: "16px", alignItems: "flex-start", marginBottom: "32px" }}>
+      <div style={{ display: "flex", gap: "12px", alignItems: "flex-start", marginBottom: "32px" }}>
         <CSVUpload onUploadSuccess={handleUploadSuccess} />
         <DemoRunGenerator onGenerateSuccess={handleUploadSuccess} />
-        <div style={{ marginLeft: "auto" }}>
-          <RunCleanup onCleanupSuccess={fetchRunMetadata} />
-        </div>
       </div>
 
-      <div style={{ marginBottom: "48px" }}>
-        <select
-          value={selectedRunId}
-          onChange={(e) => setSelectedRunId(e.target.value)}
-          disabled={loadingRuns}
-        >
-          <option value="">Select snapshot</option>
-          {runMetadata.map((run) => (
-            <option key={run.runId} value={run.runId}>
-              {run.label}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={compareRunId}
-          onChange={(e) => setCompareRunId(e.target.value)}
-          disabled={loadingRuns}
-        >
-          <option value="">Compare with</option>
-          {runMetadata
-            .filter((run) => run.runId !== selectedRunId)
-            .map((run) => (
+      <div style={{ marginBottom: "56px" }}>
+        <label style={{ 
+          display: "block", 
+          fontSize: "11px", 
+          fontWeight: "600", 
+          textTransform: "uppercase", 
+          letterSpacing: "0.5px",
+          color: "#64748b",
+          marginBottom: "12px"
+        }}>
+          Weekly Portfolio Snapshot
+        </label>
+        <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
+          <select
+            value={selectedRunId}
+            onChange={(e) => setSelectedRunId(e.target.value)}
+            disabled={loadingRuns}
+            style={{ minWidth: "280px" }}
+          >
+            <option value="">Select snapshot</option>
+            {runMetadata.map((run) => (
               <option key={run.runId} value={run.runId}>
                 {run.label}
               </option>
             ))}
-        </select>
+          </select>
+
+          <select
+            value={compareRunId}
+            onChange={(e) => setCompareRunId(e.target.value)}
+            disabled={loadingRuns}
+            style={{ minWidth: "200px" }}
+          >
+            <option value="">Compare to (optional)</option>
+            {runMetadata
+              .filter((run) => run.runId !== selectedRunId)
+              .map((run) => (
+                <option key={run.runId} value={run.runId}>
+                  {run.label}
+                </option>
+              ))}
+          </select>
+        </div>
       </div>
 
       {error && <div className="error">Error: {error}</div>}
@@ -232,14 +259,90 @@ export function RunDashboard() {
             compareSignals={compareSignals}
             compareValidation={compareValidation}
           />
-          <PerProjectTable
-            signals={signals}
-            compareSignals={compareSignals}
-          />
-          <RiskDistribution signals={signals} />
-          <BottleneckBreakdown signals={signals} />
-          <StatusOverview signals={signals} />
-          <DataQualitySummary validation={validation} />
+          
+          {compareSignals && (
+            <div style={{ marginTop: "32px", marginBottom: "32px", padding: "20px 0", borderTop: "1px solid #e5e7eb", borderBottom: "1px solid #e5e7eb" }}>
+              <h3 style={{ marginBottom: "16px", fontSize: "11px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px", color: "#64748b" }}>
+                Change Summary
+              </h3>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "24px" }}>
+                <div>
+                  <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "4px" }}>Tasks Behind Schedule</div>
+                  <div style={{ fontSize: "20px", fontWeight: "600", color: "#111" }}>
+                    {formatDelta(computeDelta(signals.totals.scheduleLagCount, compareSignals.totals.scheduleLagCount), true)}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "4px" }}>Critical Path Risk</div>
+                  <div style={{ fontSize: "20px", fontWeight: "600", color: "#111" }}>
+                    {formatDelta(computeDelta(signals.totals.criticalPathRiskCount, compareSignals.totals.criticalPathRiskCount), true)}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "4px" }}>Budget Overburn</div>
+                  <div style={{ fontSize: "20px", fontWeight: "600", color: "#111" }}>
+                    {formatDelta(computeDelta(signals.totals.budgetOverburnCount, compareSignals.totals.budgetOverburnCount), true)}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "4px" }}>Projected Overrun</div>
+                  <div style={{ fontSize: "20px", fontWeight: "600", color: "#111" }}>
+                    {(() => {
+                      const formatCurrency = (amount: number): string => {
+                        if (amount < 1000) {
+                          return `$${Math.round(amount)}`;
+                        }
+                        if (amount < 1000000) {
+                          return `$${(amount / 1000).toFixed(1)}k`;
+                        }
+                        return `$${(amount / 1000000).toFixed(2)}M`;
+                      };
+                      const currentAvg = signals.perProjectRiskSummary.reduce((sum, p) => {
+                        const overrun = Math.max(0, p.totalBudgetSpent - p.totalBudgetAllocated);
+                        return sum + overrun;
+                      }, 0) / signals.perProjectRiskSummary.length;
+                      const compareAvg = compareSignals.perProjectRiskSummary.reduce((sum, p) => {
+                        const overrun = Math.max(0, p.totalBudgetSpent - p.totalBudgetAllocated);
+                        return sum + overrun;
+                      }, 0) / compareSignals.perProjectRiskSummary.length;
+                      const delta = computeDelta(currentAvg, compareAvg);
+                      const baseValue = formatCurrency(currentAvg);
+                      return delta !== null && delta !== 0 
+                        ? `${baseValue} ${formatDelta(delta, false, formatCurrency)}`
+                        : baseValue;
+                    })()}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Accordion title="Project Portfolio Overview" defaultOpen={true}>
+            <PerProjectTable
+              signals={signals}
+              compareSignals={compareSignals}
+            />
+          </Accordion>
+
+          <Accordion title="Portfolio Risk Breakdown">
+            <RiskDistribution signals={signals} />
+          </Accordion>
+
+          <Accordion title="Operational Bottlenecks">
+            <BottleneckBreakdown signals={signals} />
+          </Accordion>
+
+          <Accordion title="Status Overview">
+            <StatusOverview signals={signals} />
+          </Accordion>
+
+          <Accordion title="Data Integrity Status">
+            <DataQualitySummary validation={validation} />
+          </Accordion>
+
+          <Accordion title="Metric Definitions" defaultOpen={false}>
+            <Definitions />
+          </Accordion>
         </>
       )}
     </div>

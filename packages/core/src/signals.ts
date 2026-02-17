@@ -1,5 +1,14 @@
 import { TaskNormalized } from "./schema.js";
 import { SIGNAL_THRESHOLDS } from "./config.js";
+import {
+  clamp,
+  clampPercentage,
+  safePercentage,
+  calculateOnTrackPercentage,
+  calculateProjectedOverrunPct,
+  calculateHealthScore as calculateHealthScoreUtil,
+  validateStatusCounts,
+} from "./metricUtils.js";
 
 /**
  * Construction risk signals output structure
@@ -90,8 +99,13 @@ function calculateExpectedProgressPct(
 }
 
 /**
- * Check if task has schedule lag using standardized logic
- * Task is behind schedule if (expectedProgressPct - actualProgressPct) >= threshold
+ * Check if task is behind schedule (v1 simplified)
+ * 
+ * DEFINITION: A task is "behind schedule" if:
+ * (expectedProgressPct - actualProgressPct) >= 10
+ * 
+ * expectedProgressPct is computed from planned_start/planned_end relative to snapshot time.
+ * 
  * @param task The task to evaluate
  * @param snapshotTime The time of the snapshot (run createdAt)
  * @returns true if task is behind schedule
@@ -111,7 +125,19 @@ function hasScheduleLag(task: TaskNormalized, snapshotTime: Date): boolean {
 }
 
 /**
- * Check if task is on critical path risk (blocked or high dependency risk)
+ * Check if task is on critical path risk (v1 simplified)
+ * 
+ * DEFINITION: A task is "critical risk" if:
+ * a) status === "blocked"
+ * OR
+ * b) it depends_on_task_id and the direct dependency task is blocked OR behind schedule
+ * 
+ * Only direct dependency (no recursion).
+ * If dependency is missing/invalid, do not mark critical risk from dependency.
+ * 
+ * This function should only be called for tasks that are NOT already behind schedule,
+ * as categories are mutually exclusive (Behind Schedule > Critical Path Risk > Budget Overburn > On Track).
+ * 
  * @param task The task to evaluate
  * @param allTasks All tasks in the project
  * @param snapshotTime The time of the snapshot (run createdAt)
@@ -122,127 +148,102 @@ function isCriticalPathRisk(
   allTasks: TaskNormalized[],
   snapshotTime: Date
 ): boolean {
-  // Blocked tasks are critical path risks
+  // Don't count as critical path risk if already behind schedule
+  // (This function should only be called for non-behind-schedule tasks)
+  if (hasScheduleLag(task, snapshotTime)) {
+    return false;
+  }
+
+  // Rule a: Blocked tasks are critical path risks
   if (task.status === "blocked") {
     return true;
   }
 
-  // Check if dependency chain has issues
+  // Rule b: Check direct dependency only (no recursion)
   if (task.dependsOnTaskId) {
     const dependency = allTasks.find((t) => t.taskId === task.dependsOnTaskId);
     if (dependency) {
-      // If dependency is blocked or behind schedule, this task is at risk
+      // If direct dependency is blocked or behind schedule, this task is at risk
       if (
         dependency.status === "blocked" ||
         hasScheduleLag(dependency, snapshotTime)
       ) {
         return true;
       }
-
-      // Check downstream chain (up to threshold)
-      let currentTask = dependency;
-      let depth = 1;
-      while (
-        currentTask.dependsOnTaskId &&
-        depth < SIGNAL_THRESHOLDS.CRITICAL_PATH_DOWNSTREAM_THRESHOLD
-      ) {
-        const upstreamTask = allTasks.find(
-          (t) => t.taskId === currentTask.dependsOnTaskId
-        );
-        if (!upstreamTask) break;
-
-        if (
-          upstreamTask.status === "blocked" ||
-          hasScheduleLag(upstreamTask, snapshotTime)
-        ) {
-          return true;
-        }
-
-        currentTask = upstreamTask;
-        depth++;
-      }
     }
+    // If dependency is missing/invalid, do not mark critical risk
   }
 
   return false;
 }
 
 /**
- * Check if task has budget overburn
- * Task is overburn if: budgetSpent > budgetAllocated * (progressPct/100) + epsilon
- * This accounts for expected spending based on progress
+ * Check if task has budget overburn (v1 simplified)
+ * 
+ * DEFINITION: A task is "overburn" if budget_spent > budget_allocated (strict >).
+ * 
  * @param task The task to evaluate
  * @returns true if task has budget overburn
  */
 function hasBudgetOverburn(task: TaskNormalized): boolean {
-  if (task.budgetAllocated === 0) {
-    return false;
-  }
-
-  // Expected spend based on progress
-  const expectedSpend = task.budgetAllocated * (task.progressPct / 100);
-  const overburnThreshold = expectedSpend + SIGNAL_THRESHOLDS.OVERBURN_EPSILON;
-
-  return task.budgetSpent > overburnThreshold;
+  // Simple comparison: spent > allocated
+  return task.budgetSpent > task.budgetAllocated;
 }
 
 /**
- * Calculate projected overrun percentage
+ * Calculate projected overrun percentage for a single task
  */
 function calculateProjectedOverrun(task: TaskNormalized): number {
-  if (task.budgetAllocated === 0) return 0;
+  if (task.budgetAllocated === 0 || !isFinite(task.budgetAllocated)) return 0;
+  if (!isFinite(task.budgetSpent)) return 0;
   
-  const currentSpendRate = task.progressPct > 0 
-    ? task.budgetSpent / task.progressPct 
-    : 0;
-  
-  const projectedTotal = currentSpendRate * 100;
-  const overrunPct = ((projectedTotal - task.budgetAllocated) / task.budgetAllocated) * 100;
-  
-  return Math.max(0, overrunPct);
-}
-
-/**
- * Calculate health score for a project (0-100)
- * Starts at 100, subtracts based on:
- * - 3 points per behind-schedule task (capped at 10 tasks = -30)
- * - 5 points per critical-path risk task (capped at 5 tasks = -25)
- * - 4 points per overburn task (capped at 6 tasks = -24)
- * - Projected overrun %: -10 if >10%, -20 if >20%
- */
-function calculateHealthScore(
-  scheduleLagCount: number,
-  criticalPathRiskCount: number,
-  budgetOverburnCount: number,
-  projectedOverrunPct: number
-): number {
-  let score = 100;
-
-  // Behind-schedule: -3 per task, capped at 10 tasks (max -30)
-  const scheduleLagDeduction = Math.min(scheduleLagCount, 10) * 3;
-  score -= scheduleLagDeduction;
-
-  // Critical-path risk: -5 per task, capped at 5 tasks (max -25)
-  const criticalPathDeduction = Math.min(criticalPathRiskCount, 5) * 5;
-  score -= criticalPathDeduction;
-
-  // Overburn: -4 per task, capped at 6 tasks (max -24)
-  const overburnDeduction = Math.min(budgetOverburnCount, 6) * 4;
-  score -= overburnDeduction;
-
-  // Projected overrun %: -10 if >10%, -20 if >20%
-  if (projectedOverrunPct > 20) {
-    score -= 20;
-  } else if (projectedOverrunPct > 10) {
-    score -= 10;
+  // Current overrun
+  const currentOverrun = task.budgetSpent - task.budgetAllocated;
+  if (currentOverrun > 0) {
+    return clampPercentage((currentOverrun / task.budgetAllocated) * 100);
   }
-
-  // Clamp to 0-100
-  return Math.max(0, Math.min(100, score));
+  
+  // Projected overrun based on spend rate
+  if (task.progressPct > 0 && task.progressPct < 100) {
+    const spendRate = task.budgetSpent / task.progressPct;
+    const projectedTotal = spendRate * 100;
+    const projectedOverrun = projectedTotal - task.budgetAllocated;
+    if (projectedOverrun > 0) {
+      return clampPercentage((projectedOverrun / task.budgetAllocated) * 100);
+    }
+  }
+  
+  return 0;
 }
 
+// Health score calculation is now done directly using calculateHealthScoreUtil
+// This function is removed to avoid confusion
+
 /**
- * Compute construction project signals from normalized tasks
+ * Compute construction project signals from normalized tasks (v1 simplified)
+ * 
+ * METRIC DEFINITIONS (v1):
+ * 
+ * 1. Schedule Lag: A task is "behind schedule" if:
+ *    (expectedProgressPct - actualProgressPct) >= 10
+ *    expectedProgressPct is computed from planned_start/planned_end relative to snapshot time
+ * 
+ * 2. Critical Path Risk: A task is "critical risk" if (and only if not already behind schedule):
+ *    a) status === "blocked"
+ *    OR
+ *    b) it depends_on_task_id and the direct dependency task is blocked OR behind schedule
+ *    Only direct dependency (no recursion). If dependency is missing/invalid, do not mark critical risk.
+ * 
+ * 3. Budget Overburn: A task is "overburn" if (and only if not already behind schedule or critical):
+ *    budget_spent > budget_allocated (strict >)
+ * 
+ * 4. On Track: Tasks that don't fall into any of the above categories
+ * 
+ * Categories are mutually exclusive and evaluated in priority order:
+ * Behind Schedule > Critical Path Risk > Budget Overburn > On Track
+ * 
+ * Per-project risk summary uses the exact same predicates as totals.
+ * 
  * @param tasks Normalized task data
  * @param runId Unique run identifier
  * @param snapshotTime Optional snapshot time (defaults to now, but should use run createdAt)
@@ -268,6 +269,9 @@ export function computeSignals(
   tasks.forEach((task) => {
     byStatus[task.status] = (byStatus[task.status] || 0) + 1;
   });
+  
+  // Validate status counts sum to total tasks
+  const validatedByStatus = validateStatusCounts(byStatus, totals.tasks);
 
   // Count by project
   const byProject: Record<string, number> = {};
@@ -287,17 +291,25 @@ export function computeSignals(
     bySubcontractor[task.subcontractor] = (bySubcontractor[task.subcontractor] || 0) + 1;
   });
 
-  // Analyze each task
+  // Analyze each task with mutually exclusive categories:
+  // A) Behind Schedule (highest priority)
+  // B) Critical Path Risk (not behind schedule)
+  // C) Budget Overburn (not behind schedule, not critical)
+  // D) On Track (everything else)
   tasks.forEach((task) => {
-    if (hasScheduleLag(task, snapshot)) {
+    const behindSchedule = hasScheduleLag(task, snapshot);
+    const criticalRisk = !behindSchedule && isCriticalPathRisk(task, tasks, snapshot);
+    const overburn = !behindSchedule && !criticalRisk && hasBudgetOverburn(task);
+    
+    if (behindSchedule) {
       totals.scheduleLagCount++;
-    }
-    if (isCriticalPathRisk(task, tasks, snapshot)) {
+    } else if (criticalRisk) {
       totals.criticalPathRiskCount++;
-    }
-    if (hasBudgetOverburn(task)) {
+    } else if (overburn) {
       totals.budgetOverburnCount++;
     }
+    // On Track tasks are not counted separately (they're the remainder)
+    
     const overrunPct = calculateProjectedOverrun(task);
     if (overrunPct > 10) { // >10% projected overrun
       totals.projectedOverrunCount++;
@@ -378,8 +390,10 @@ export function computeSignals(
       scheduleLagCount: number;
       criticalPathRiskCount: number;
       budgetOverburnCount: number;
+      blockedCount: number;
       totalBudgetAllocated: number;
       totalBudgetSpent: number;
+      totalProgressPct: number;
     }
   > = {};
 
@@ -391,39 +405,60 @@ export function computeSignals(
         scheduleLagCount: 0,
         criticalPathRiskCount: 0,
         budgetOverburnCount: 0,
+        blockedCount: 0,
         totalBudgetAllocated: 0,
         totalBudgetSpent: 0,
+        totalProgressPct: 0,
       };
     }
 
     projectStats[projectId].totalTasks++;
-    if (hasScheduleLag(task, snapshot)) {
+    // Use same mutually exclusive logic for per-project stats
+    const behindSchedule = hasScheduleLag(task, snapshot);
+    const criticalRisk = !behindSchedule && isCriticalPathRisk(task, tasks, snapshot);
+    const overburn = !behindSchedule && !criticalRisk && hasBudgetOverburn(task);
+    
+    if (behindSchedule) {
       projectStats[projectId].scheduleLagCount++;
-    }
-    if (isCriticalPathRisk(task, tasks, snapshot)) {
+    } else if (criticalRisk) {
       projectStats[projectId].criticalPathRiskCount++;
-    }
-    if (hasBudgetOverburn(task)) {
+    } else if (overburn) {
       projectStats[projectId].budgetOverburnCount++;
     }
+    
+    if (task.status === "blocked") {
+      projectStats[projectId].blockedCount++;
+    }
+    
     projectStats[projectId].totalBudgetAllocated += task.budgetAllocated;
     projectStats[projectId].totalBudgetSpent += task.budgetSpent;
+    projectStats[projectId].totalProgressPct += task.progressPct;
   });
 
   const perProjectRiskSummary = Object.entries(projectStats).map(
     ([projectId, stats]) => {
-      const projectedOverrunPct =
-        stats.totalBudgetAllocated > 0
-          ? ((stats.totalBudgetSpent - stats.totalBudgetAllocated) /
-              stats.totalBudgetAllocated) *
-            100
-          : 0;
+      // Calculate average progress for the project
+      const avgProgressPct = stats.totalTasks > 0 
+        ? stats.totalProgressPct / stats.totalTasks 
+        : 0;
 
-      const healthScore = calculateHealthScore(
+      // Calculate projected overrun using comprehensive method
+      const projectedOverrunPct = calculateProjectedOverrunPct(
+        stats.totalBudgetAllocated,
+        stats.totalBudgetSpent,
+        avgProgressPct,
+        stats.budgetOverburnCount,
+        stats.totalTasks
+      );
+
+      // Calculate health score with blocked tasks included
+      const healthScore = calculateHealthScoreUtil(
         stats.scheduleLagCount,
         stats.criticalPathRiskCount,
         stats.budgetOverburnCount,
-        Math.max(0, projectedOverrunPct)
+        stats.blockedCount,
+        stats.totalTasks,
+        projectedOverrunPct
       );
 
       return {
@@ -432,21 +467,23 @@ export function computeSignals(
         scheduleLagCount: stats.scheduleLagCount,
         criticalPathRiskCount: stats.criticalPathRiskCount,
         budgetOverburnCount: stats.budgetOverburnCount,
-        projectedOverrunPct: Math.max(0, projectedOverrunPct),
+        projectedOverrunPct: clampPercentage(projectedOverrunPct),
         totalBudgetAllocated: stats.totalBudgetAllocated,
         totalBudgetSpent: stats.totalBudgetSpent,
-        healthScore,
+        healthScore: clamp(healthScore, 0, 100),
       };
     }
   );
 
-  // Calculate global health score (weighted average by project size, or simple average)
-  // Using simple average for now
+  // Calculate global health score (weighted average by project size)
   const globalHealthScore =
     perProjectRiskSummary.length > 0
       ? Math.round(
-          perProjectRiskSummary.reduce((sum, p) => sum + p.healthScore, 0) /
-            perProjectRiskSummary.length
+          perProjectRiskSummary.reduce((sum, p) => {
+            const weight = p.totalTasks;
+            return sum + (p.healthScore * weight);
+          }, 0) / 
+          perProjectRiskSummary.reduce((sum, p) => sum + p.totalTasks, 0)
         )
       : 100;
 
@@ -454,13 +491,14 @@ export function computeSignals(
     runId,
     generatedAt: snapshot.toISOString(),
     totals,
-    byStatus,
+    byStatus: validatedByStatus,
     byProject,
     byTrade,
     bySubcontractor,
     topBottlenecksBySubcontractor,
     topBottlenecksByTrade,
     perProjectRiskSummary,
-    globalHealthScore,
+    globalHealthScore: clamp(globalHealthScore, 0, 100),
   };
 }
+

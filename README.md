@@ -1,22 +1,23 @@
-# ProjectOps
+# ProjectOps — Internal Ops Dashboard
 
-**Construction Schedule & Budget Risk Monitor**
+Construction operations teams need visibility into schedule and budget risks across multiple active projects, but existing tools often require manual analysis or lack deterministic risk calculations. ProjectOps ingests weekly CSV snapshots from construction project management systems and automatically computes operational risk signals—schedule lag, critical path dependencies, and budget overruns—enabling data-driven decision making without manual spreadsheet analysis.
 
-ProjectOps is a deterministic operational analytics engine that converts raw construction project exports into structured decision signals with reproducible run snapshots. It identifies schedule delays, budget overruns, and dependency bottlenecks across multiple projects to help construction operations teams make data-driven decisions.
+## Features
 
-## Who It's For
+- **Deterministic risk signal calculation** — Computes schedule lag, critical path risk, and budget overburn using consistent v1 rules (no ML, reproducible results)
+- **Portfolio health scoring** — Weighted health scores per project and portfolio-level aggregation
+- **Bottleneck identification** — Surfaces subcontractors and trades causing schedule delays
+- **Snapshot comparison** — Track changes between weekly snapshots with delta metrics
+- **HTML report generation** — Automatic `dashboard_report.html` generation for each ingestion run
 
-- **Construction Operations Managers** monitoring multiple active projects
-- **Project Managers** tracking schedule and budget risks
-- **Operations Analysts** analyzing project health and bottlenecks
+## Tech Stack
 
-## What Decisions It Supports
+- **React + Vite** — Modern frontend with TypeScript
+- **Node/TypeScript API** — Express server for file upload and data processing
+- **Shared core package** — Centralized ingestion pipeline and signal calculations
+- **Vitest** — Test suite for core logic and metrics
 
-- **Schedule Risk**: Identify tasks behind schedule and critical path dependencies at risk
-- **Budget Overburn**: Detect tasks overspending and project projected overruns
-- **Dependency Bottlenecks**: Surface subcontractors and trades causing schedule lag
-
-## Quickstart
+## Run Locally
 
 ### Development
 
@@ -24,18 +25,23 @@ ProjectOps is a deterministic operational analytics engine that converts raw con
 # Install dependencies
 npm install
 
-# Start the web application (API + UI)
+# Start development server (API + Web UI)
 npm run dev
 ```
 
-Then:
-1. Open http://localhost:3000
-2. Click **"Generate Demo Run"** to create a sample dataset
-3. Or click **"Upload Weekly Snapshot CSV"** to upload your own data
+Then open http://localhost:3000 in your browser. The API runs on port 3001, and the web UI runs on port 3000 with Vite's dev server.
 
-The dashboard will automatically load and display project health scores, risk metrics, and per-project summaries.
+### Tests
 
-### Production
+```bash
+# Run test suite
+npm test
+
+# Run tests once (CI mode)
+npm run test:run
+```
+
+### Build
 
 ```bash
 # Build for production
@@ -45,21 +51,32 @@ npm run build
 npm start
 ```
 
-The production server runs on http://localhost:3001 and serves both the API and static web files.
-
-## CLI Usage (Optional)
-
-For batch processing or automation:
+### Lint
 
 ```bash
-# Ingest a CSV file
-npm run ingest -- data/sample_inputs/projectops_tasks.csv
-
-# Generate a sample dataset
-npm run gen:sample -- --seed 42 --projects 3 --tasks 25
+# Type-check TypeScript code
+npm run lint
 ```
 
-## Input CSV Schema
+## Demo Generation
+
+Demo data generation uses a seeded random number generator for reproducibility. The default seed (`20260215`) ensures consistent output across runs:
+
+```bash
+# Generate demo snapshot (uses default seed)
+npm run demo:reset
+
+# Or via UI: Click "Generate Demo Snapshot"
+```
+
+Each demo run produces:
+- 4-8 projects with 80-140 total tasks
+- Realistic risk metric ranges (10-45% behind schedule, 8-35% critical path risk, etc.)
+- Deterministic results when using the same seed
+
+The seed is stored in the run manifest for provenance. Changing the seed produces different but still realistic data distributions.
+
+## Data Contract
 
 Your CSV must include these columns:
 
@@ -86,53 +103,76 @@ Your CSV must include these columns:
 - Soft warn: `progress_pct` out of range → clamped to 0-100
 - Soft warn: Missing `budget_spent` → defaults to 0
 
-## Output Artifacts
+## Portfolio Notes
 
-Each ingestion run creates a timestamped folder in `runs/` containing:
+**Computed Metrics**: All numbers displayed in the dashboard are computed from the uploaded snapshot data, not hard-coded. The system uses deterministic calculations based on:
+- Schedule lag (tasks behind planned end dates)
+- Critical path dependencies (tasks blocking other tasks)
+- Budget spend rates (actual vs. allocated)
+- Task status distribution
 
-| File | Description |
-|------|-------------|
-| `manifest.json` | Run metadata: label, source type, row counts, timestamps |
-| `raw.csv` | Original input CSV (preserved) |
-| `normalized_tasks.json` | Canonical task data with validation results |
-| `validation_report.json` | Data quality summary: rejected rows, warnings |
-| `project_signals.json` | Computed metrics: health scores, bottlenecks, per-project risks |
-| `dashboard_report.html` | Static HTML report (openable in browser) |
+**Data Integrity**: The ingestion pipeline performs comprehensive validation:
+- Date validation (ensures planned_end > planned_start)
+- Missing field detection (warns on optional fields, fails on required fields)
+- Progress percentage clamping (0-100 range)
+- Status count validation (ensures status counts sum to total tasks)
 
-## Screenshots
+**V1 Scope**: This is a portfolio demonstration of an internal operations dashboard. Current features:
+- CSV ingestion with validation
+- Deterministic risk signal calculation
+- Portfolio-level and per-project metrics
+- Snapshot comparison
 
-<!-- TODO: Add screenshots -->
-- Executive Snapshot with Project Health Score
-- Per-Project Risk Summary Table
-- Schedule Lag Bottlenecks by Subcontractor/Trade
-- Data Reliability Summary
+**Future Expansion** (not in current scope):
+- User authentication and multi-tenant support
+- Real-time integrations with construction management systems
+- Persistent database storage (currently file-based)
+- Advanced analytics and forecasting
+- Custom alerting and notifications
 
-## Design Principles
+## HTML Report Generation
 
-- **Deterministic**: No machine learning or randomness—same input produces same output. Demo runs use seeded random number generation (default seed: 42) for reproducible results.
-- **Reproducible Snapshots**: Each run is an immutable snapshot with full audit trail, including source type, seed (for demos), and generation timestamp.
-- **Minimal Dependencies**: Core logic is pure TypeScript with Zod validation
-- **Manager-Friendly**: Business language, not technical jargon
+Each CSV ingestion automatically generates a `dashboard_report.html` file in the run folder. The report includes:
 
-## Run Management
+- Run summary and metadata
+- Project signals (risk totals, status counts)
+- Per-project risk breakdown
+- Top bottlenecks by subcontractor and trade
+- Data quality validation results
 
-### Cleanup
+**Access reports:**
+- Via UI: Click "View full report →" link (appears when a run is selected)
+- Via CLI: Reports are in `runs/{runId}/dashboard_report.html`
+- Via API: `GET /api/runs/{runId}/report` returns the report path
 
-The `runs/` folder contains local artifacts and is not meant to be committed. Use cleanup commands to manage disk space:
+Reports are generated synchronously during ingestion, so they're always available immediately after upload or demo generation.
 
-```bash
-# Keep latest 10 demo runs, delete older ones
-npm run cleanup:runs
+## Development
 
-# Delete all demo runs and regenerate baseline (seed 42)
-npm run reset:demo
+### Project Structure
+
+```
+projectops/
+├── apps/
+│   ├── api/          # Express API server
+│   ├── web/          # React frontend
+│   └── cli/          # CLI tools
+├── packages/
+│   └── core/         # Shared ingestion and signal calculation logic
+├── scripts/          # Utility scripts (demo generation, cleanup)
+├── tests/            # Test suite
+└── data/
+    └── sample_inputs/ # Sample CSV files
 ```
 
-The web UI also includes a "Clean up runs" button that keeps the latest 10 demo runs.
+### Scripts
 
-### Demo Run Determinism
-
-Demo runs are generated using a seeded random number generator. Clicking "Generate Demo Run" multiple times with the same seed produces identical metrics. The default seed is 42, ensuring consistent demo data for screenshots and documentation.
+- `npm run dev` — Start API + Web UI in development mode
+- `npm run build` — Build for production (API + Web)
+- `npm run test` — Run test suite
+- `npm run lint` — Type-check TypeScript code
+- `npm run demo:reset` — Reset demo data
+- `npm run ingest -- <file>` — Ingest a CSV file via CLI
 
 ## License
 

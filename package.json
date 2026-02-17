@@ -8,6 +8,7 @@
     "gen:sample": "tsx scripts/generate_sample_run.ts",
     "test": "vitest",
     "test:run": "vitest run",
+    "lint": "tsc --noEmit",
     "dev:api": "tsx apps/api/apiServer.ts",
     "dev:web": "cd apps/web && vite",
     "build:web": "cd apps/web && vite build",
@@ -17,7 +18,8 @@
     "preview:web": "cd apps/web && vite preview",
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
     "cleanup:runs": "tsx scripts/cleanup_runs.ts",
-    "reset:demo": "tsx scripts/reset_demo.ts"
+    "reset:demo": "tsx scripts/reset_demo.ts",
+    "demo:reset": "tsx scripts/reset_demo.ts"
   },
   "keywords": [],
   "author": "",

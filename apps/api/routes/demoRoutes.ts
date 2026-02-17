@@ -2,7 +2,7 @@ import express from "express";
 import { writeFileSync, unlinkSync, mkdirSync } from "fs";
 import { join } from "path";
 import { ingestCSV } from "../../../packages/core/src/ingest.js";
-import { generateDemoRun, DEFAULT_DEMO_SEED } from "../../../scripts/generate_demo_run.js";
+import { generateDemoRun, DEFAULT_DEMO_SEED, hashSeedToNumber } from "../../../scripts/generate_demo_run.js";
 
 const router = express.Router();
 
@@ -11,15 +11,18 @@ const router = express.Router();
  */
 router.post("/", async (req, res) => {
   try {
-    // Get optional seed from query or body, default to 42 for determinism
-    const seed = req.query.seed 
-      ? parseInt(req.query.seed as string, 10)
+    // Get optional seed from query or body, default to "projectops-demo" for determinism
+    // Accept string seed and hash it to a number
+    const seedInput = req.query.seed 
+      ? String(req.query.seed)
       : req.body?.seed 
-      ? parseInt(req.body.seed, 10)
+      ? String(req.body.seed)
       : DEFAULT_DEMO_SEED;
+    
+    const seed = hashSeedToNumber(seedInput);
 
-    // Generate demo CSV
-    const csvContent = generateDemoRun(seed);
+    // Generate demo CSV (pass string seed, function will hash it)
+    const csvContent = generateDemoRun(seedInput);
 
     // Write to temp file
     const tmpDir = join(process.cwd(), "tmp");
@@ -32,11 +35,13 @@ router.post("/", async (req, res) => {
     writeFileSync(tempFilePath, csvContent, "utf-8");
 
     try {
+      // Store seed string for provenance (use the input seed, not the hashed number)
       // Process the generated CSV using existing ingestion pipeline
       const result = ingestCSV(tempFilePath, {
-        runLabel: "Weekly Snapshot — ProjectOps Demo",
+        runLabel: "Weekly Snapshot — Demo",
         sourceType: "demo",
         seed: seed,
+        seedString: seedInput,
         inputRowCount: csvContent.split("\n").length - 1, // Subtract header
       });
 
@@ -54,6 +59,7 @@ router.post("/", async (req, res) => {
         validRows: result.validRows,
         invalidRows: result.invalidRows,
         seed: seed,
+        seedString: seedInput,
       });
     } catch (error) {
       // Clean up temp file on error

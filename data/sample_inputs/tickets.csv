@@ -1,9 +1,0 @@
-ticket_id,created_at,status,category,priority,sla_hours,assignee,updated_at
-T001,2024-01-15T10:00:00Z,open,technical,high,24,john@example.com,2024-01-15T11:00:00Z
-T002,2024-01-15T11:30:00Z,pending,billing,normal,48,jane@example.com,2024-01-15T12:00:00Z
-T003,2024-01-15T12:00:00Z,solved,support,low,72,,2024-01-15T14:00:00Z
-T004,2024-01-15T13:00:00Z,open,technical,urgent,12,bob@example.com,2024-01-15T13:30:00Z
-T005,2024-01-15T14:00:00Z,closed,other,normal,48,alice@example.com,2024-01-15T16:00:00Z
-T006,2024-01-15T15:00:00Z,open,technical,,36,,2024-01-15T15:30:00Z
-T007,2024-01-15T16:00:00Z,unknown_status,technical,high,24,charlie@example.com,2024-01-15T17:00:00Z
-T008,2024-01-15T17:00:00Z,open,,high,24,dave@example.com,2024-01-15T18:00:00Z

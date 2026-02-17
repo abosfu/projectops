@@ -16,12 +16,14 @@ export function computeDelta(
  */
 export function formatDelta(
   delta: number | null,
-  isWorse: boolean = false
+  isWorse: boolean = false,
+  formatter?: (value: number) => string
 ): string {
   if (delta === null) return "";
   if (delta === 0) return "";
   const sign = delta > 0 ? "+" : "";
-  return `(${sign}${delta})`;
+  const value = formatter ? formatter(Math.abs(delta)) : Math.abs(delta);
+  return `(${sign}${value})`;
 }
 
 /**

@@ -25,10 +25,11 @@ export interface IngestionResult {
  * Source metadata for ingestion
  */
 export interface IngestionSource {
-  runLabel: string;
-  sourceType: "upload" | "demo" | "cli";
+  runLabel?: string;
+  sourceType?: "upload" | "demo" | "cli";
   sourceFilename?: string;
   seed?: number | null;
+  seedString?: string | null;
   inputRowCount?: number;
 }
 
@@ -72,6 +73,7 @@ export function ingestCSV(
   const sourceType = source?.sourceType || "cli";
   const sourceFilename = source?.sourceFilename;
   const seed = source?.seed;
+  const seedString = source?.seedString;
   const inputRowCount = source?.inputRowCount;
 
   // Store artifacts
@@ -86,6 +88,7 @@ export function ingestCSV(
     sourceType,
     sourceFilename,
     seed,
+    seedString,
     inputRowCount
   );
 

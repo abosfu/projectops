@@ -22,6 +22,8 @@ export function StatusBarChart({ data }: StatusBarChartProps) {
             stroke="#64748b"
             style={{ fontSize: "12px" }}
             tick={{ fill: "#64748b" }}
+            allowDecimals={false}
+            domain={[0, 'dataMax']}
           />
           <Tooltip
             contentStyle={{

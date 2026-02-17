@@ -52,6 +52,7 @@ export function storeRunArtifacts(
   sourceType: "upload" | "demo" | "cli",
   sourceFilename?: string,
   seed?: number | null,
+  seedString?: string | null,
   inputRowCount?: number
 ): string {
   const runsDir = join(process.cwd(), "runs");
@@ -89,6 +90,7 @@ export function storeRunArtifacts(
     sourceType,
     sourceFilename,
     seed: seed !== undefined ? seed : null,
+    seedString: seedString !== undefined ? seedString : null,
     inputRowCount: inputRowCount !== undefined ? inputRowCount : totalRows,
     inputFile: inputFilePath,
     totalRows,
